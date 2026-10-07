@@ -1,0 +1,185 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Autonomous House OS API",
+    "version": "1.0.0",
+    "description": "Production REST API for House OS Digital Twin, Brain, Priority Conflict Engine, and Subsystems"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8000/api/v1",
+      "description": "Local Edge Server Gateway"
+    }
+  ],
+  "paths": {
+    "/twin/state": {
+      "get": {
+        "summary": "Get Digital Twin Live Snapshot",
+        "operationId": "getTwinSnapshot",
+        "responses": {
+          "200": {
+            "description": "Current living state of house, floors, rooms, devices, and sensors",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DigitalTwinSnapshot"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/devices/{device_id}/command": {
+      "post": {
+        "summary": "Dispatch Actuator Command via Conflict Engine",
+        "operationId": "dispatchDeviceCommand",
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommandDispatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": { "description": "Command accepted and dispatched to hardware" },
+          "409": { "description": "Command preempted or blocked by Priority Conflict Engine" }
+        }
+      }
+    },
+    "/brain/intent": {
+      "post": {
+        "summary": "Parse Natural Language Intent & Generate Plan",
+        "operationId": "parseHouseIntent",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IntentRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Parsed intent, proposed actions, and What-If simulation results",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntentResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health/score": {
+      "get": {
+        "summary": "Get Composite House Health Radar",
+        "operationId": "getHouseHealthScore",
+        "responses": {
+          "200": {
+            "description": "Multi-dimensional house health assessment",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HouseHealthRadar"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/emergency/trigger": {
+      "post": {
+        "summary": "Trigger Level 0 Emergency Cutoff",
+        "operationId": "triggerEmergency",
+        "responses": {
+          "200": { "description": "Emergency circuit executed across all edge nodes" }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "DigitalTwinSnapshot": {
+        "type": "object",
+        "required": ["house_id", "name", "timestamp", "security_mode", "health_score", "active_power_watts", "floors"],
+        "properties": {
+          "house_id": { "type": "string" },
+          "name": { "type": "string" },
+          "timestamp": { "type": "string", "format": "date-time" },
+          "security_mode": { "type": "string" },
+          "health_score": { "type": "integer" },
+          "active_power_watts": { "type": "number" },
+          "daily_energy_kwh": { "type": "number" },
+          "main_tank_level_pct": { "type": "number" },
+          "water_flow_lpm": { "type": "number" },
+          "floors": { "type": "array", "items": { "type": "object" } }
+        }
+      },
+      "CommandDispatch": {
+        "type": "object",
+        "required": ["command_id", "endpoint", "action", "parameters"],
+        "properties": {
+          "command_id": { "type": "string" },
+          "endpoint": { "type": "string" },
+          "action": { "type": "string" },
+          "parameters": { "type": "object" },
+          "priority_tier": { "type": "integer", "default": 3 },
+          "reason": { "type": "string" }
+        }
+      },
+      "IntentRequest": {
+        "type": "object",
+        "required": ["query_text"],
+        "properties": {
+          "query_text": { "type": "string" },
+          "dry_run": { "type": "boolean", "default": false }
+        }
+      },
+      "IntentResponse": {
+        "type": "object",
+        "required": ["intent_id", "parsed_intent", "confidence", "proposed_actions", "explanation"],
+        "properties": {
+          "intent_id": { "type": "string" },
+          "parsed_intent": { "type": "string" },
+          "confidence": { "type": "number" },
+          "requires_confirmation": { "type": "boolean" },
+          "proposed_actions": { "type": "array", "items": { "type": "object" } },
+          "explanation": { "type": "string" }
+        }
+      },
+      "HouseHealthRadar": {
+        "type": "object",
+        "required": ["overall_score", "safety_score", "security_score", "energy_score", "water_score", "device_score"],
+        "properties": {
+          "overall_score": { "type": "integer" },
+          "safety_score": { "type": "integer" },
+          "security_score": { "type": "integer" },
+          "energy_score": { "type": "integer" },
+          "water_score": { "type": "integer" },
+          "device_score": { "type": "integer" },
+          "network_score": { "type": "integer" },
+          "environment_score": { "type": "integer" },
+          "maintenance_score": { "type": "integer" },
+          "explanations": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    }
+  }
+}

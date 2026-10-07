@@ -1,0 +1,137 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "HouseOS_MQTT_Topic_Contract",
+  "version": "1.0.0",
+  "base_prefix": "house/{house_id}",
+  "topics": [
+    {
+      "pattern": "house/{house_id}/telemetry/{floor}/{room}/{device_id}/{sensor_id}",
+      "direction": "ESP32_TO_SERVER",
+      "qos": 1,
+      "retain": false,
+      "description": "High-frequency and periodic sensor measurements from ESP32 edge nodes",
+      "payload_schema": {
+        "type": "object",
+        "required": ["timestamp", "sensor_id", "device_id", "metric_type", "value", "unit", "status"],
+        "properties": {
+          "timestamp": { "type": "integer", "description": "Epoch ms" },
+          "sensor_id": { "type": "string" },
+          "device_id": { "type": "string" },
+          "metric_type": { "type": "string", "enum": ["temperature", "humidity", "lux", "motion", "smoke", "gas", "water_leak", "power_w", "water_flow", "tank_level", "pressure_bar"] },
+          "value": { "type": "number" },
+          "unit": { "type": "string" },
+          "read_seq": { "type": "integer" },
+          "status": { "type": "string", "enum": ["VALID", "OUT_OF_BOUNDS", "SENSOR_FAULT"] },
+          "battery_pct": { "type": ["number", "null"] }
+        }
+      }
+    },
+    {
+      "pattern": "house/{house_id}/command/{device_id}/{endpoint}",
+      "direction": "SERVER_TO_ESP32",
+      "qos": 2,
+      "retain": false,
+      "description": "Deterministic actuation dispatch emitted by Priority Conflict Engine",
+      "payload_schema": {
+        "type": "object",
+        "required": ["command_id", "timestamp", "device_id", "endpoint", "action", "parameters", "priority_tier"],
+        "properties": {
+          "command_id": { "type": "string", "format": "uuid" },
+          "timestamp": { "type": "integer" },
+          "device_id": { "type": "string" },
+          "endpoint": { "type": "string" },
+          "action": { "type": "string" },
+          "parameters": { "type": "object" },
+          "priority_tier": { "type": "integer", "minimum": 0, "maximum": 6 },
+          "timeout_ms": { "type": "integer", "default": 2500 }
+        }
+      }
+    },
+    {
+      "pattern": "house/{house_id}/state/{device_id}/{endpoint}",
+      "direction": "ESP32_TO_SERVER",
+      "qos": 1,
+      "retain": true,
+      "description": "Current verified physical state of actuator on ESP32",
+      "payload_schema": {
+        "type": "object",
+        "required": ["device_id", "endpoint", "timestamp", "state"],
+        "properties": {
+          "device_id": { "type": "string" },
+          "endpoint": { "type": "string" },
+          "timestamp": { "type": "integer" },
+          "state": { "type": "object" }
+        }
+      }
+    },
+    {
+      "pattern": "house/{house_id}/ack/{device_id}/{command_id}",
+      "direction": "ESP32_TO_SERVER",
+      "qos": 2,
+      "retain": false,
+      "description": "Hardware execution acknowledgment returned immediately upon GPIO write",
+      "payload_schema": {
+        "type": "object",
+        "required": ["command_id", "device_id", "endpoint", "status", "execution_duration_ms", "current_state"],
+        "properties": {
+          "command_id": { "type": "string" },
+          "device_id": { "type": "string" },
+          "endpoint": { "type": "string" },
+          "status": { "type": "string", "enum": ["APPLIED", "REJECTED_LOCAL_FAULT", "HARDWARE_TIMEOUT"] },
+          "execution_duration_ms": { "type": "number" },
+          "current_state": { "type": "object" },
+          "error_code": { "type": ["string", "null"] }
+        }
+      }
+    },
+    {
+      "pattern": "house/{house_id}/heartbeat/{device_id}",
+      "direction": "BIDIRECTIONAL",
+      "qos": 1,
+      "retain": true,
+      "description": "ESP32 connectivity heartbeat and Last Will and Testament announcement",
+      "payload_schema": {
+        "type": "object",
+        "required": ["device_id", "status"],
+        "properties": {
+          "device_id": { "type": "string" },
+          "status": { "type": "string", "enum": ["ONLINE", "OFFLINE_UNEXPECTED", "SHUTTING_DOWN"] },
+          "ip_address": { "type": "string" },
+          "rssi_dbm": { "type": "integer" },
+          "uptime_seconds": { "type": "integer" },
+          "free_heap_bytes": { "type": "integer" },
+          "firmware_version": { "type": "string" }
+        }
+      }
+    },
+    {
+      "pattern": "house/{house_id}/emergency/broadcast",
+      "direction": "SERVER_TO_ALL",
+      "qos": 2,
+      "retain": false,
+      "description": "Deterministic system-wide Level 0 emergency cutoff broadcast",
+      "payload_schema": {
+        "type": "object",
+        "required": ["emergency_id", "timestamp", "severity", "hazard_type", "actions_required"],
+        "properties": {
+          "emergency_id": { "type": "string" },
+          "timestamp": { "type": "integer" },
+          "severity": { "type": "string", "enum": ["CRITICAL_LEVEL_0", "SECURITY_ALERT_LEVEL_1"] },
+          "hazard_type": { "type": "string" },
+          "source_room": { "type": "string" },
+          "actions_required": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["target_device_type", "command"],
+              "properties": {
+                "target_device_type": { "type": "string" },
+                "command": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

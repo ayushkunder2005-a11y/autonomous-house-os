@@ -1,0 +1,104 @@
+services:
+  database:
+    image: timescale/timescaledb:latest-pg16
+    environment:
+      POSTGRES_DB: house_os
+      POSTGRES_USER: house_os
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U house_os -d house_os"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+    networks: [internal_net]
+
+  redis:
+    image: redis:7.2-alpine
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:?set REDIS_PASSWORD}
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+    networks: [internal_net]
+
+  chromadb:
+    image: chromadb/chroma:0.4.24
+    environment:
+      IS_PERSISTENT: "TRUE"
+    volumes:
+      - chroma-data:/chroma/chroma
+    restart: unless-stopped
+    networks: [internal_net]
+
+  mqtt:
+    image: eclipse-mosquitto:2.0
+    volumes:
+      - ./infrastructure/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - ./infrastructure/mosquitto/passwd:/mosquitto/config/passwd:ro
+      - ./infrastructure/mosquitto/acl:/mosquitto/config/acl:ro
+      - mosquitto-data:/mosquitto/data
+      - mosquitto-log:/mosquitto/log
+    ports:
+      - "${IOT_BIND_ADDRESS:-127.0.0.1}:1883:1883"
+    restart: unless-stopped
+    networks: [iot_net]
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      HOUSE_ENVIRONMENT: production
+      HOUSE_DATABASE_URL: postgresql+asyncpg://house_os:${POSTGRES_PASSWORD}@database/house_os
+      HOUSE_DATABASE_AUTO_CREATE: "false"
+      HOUSE_SECRET_KEY: ${HOUSE_SECRET_KEY:?set HOUSE_SECRET_KEY}
+      HOUSE_MQTT_ENABLED: "true"
+      HOUSE_MQTT_HOST: mqtt
+      HOUSE_MQTT_USERNAME: ${MQTT_USERNAME:-house-backend}
+      HOUSE_MQTT_PASSWORD: ${MQTT_PASSWORD:?set MQTT_PASSWORD}
+      HOUSE_REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+    depends_on:
+      database:
+        condition: service_healthy
+      mqtt:
+        condition: service_started
+      redis:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    command: ["sh", "-c", "cd /srv/house-os && alembic upgrade head && cd backend && uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers"]
+    restart: unless-stopped
+    networks: [iot_net, internal_net, public_net]
+
+  frontend:
+    build:
+      context: ./frontend
+    depends_on:
+      - backend
+    ports:
+      - "80:80"
+    restart: unless-stopped
+    networks: [public_net]
+
+networks:
+  iot_net:
+    driver: bridge
+  internal_net:
+    driver: bridge
+    internal: true
+  public_net:
+    driver: bridge
+
+volumes:
+  postgres-data:
+  mosquitto-data:
+  mosquitto-log:
+  redis-data:
+  chroma-data:

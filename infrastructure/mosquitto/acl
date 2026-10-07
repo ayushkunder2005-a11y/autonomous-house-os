@@ -1,0 +1,7 @@
+user house-backend
+topic readwrite house/#
+
+# Provision each ESP32 with a unique account and narrow this pattern further
+# when generating the deployment-specific ACL.
+pattern readwrite house/%u/#
+

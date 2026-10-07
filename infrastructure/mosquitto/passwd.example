@@ -1,0 +1,3 @@
+# Generate the real, ignored password file before starting Mosquitto:
+# docker run --rm -it -v "${PWD}/infrastructure/mosquitto:/work" eclipse-mosquitto:2.0 mosquitto_passwd -c /work/passwd house-backend
+

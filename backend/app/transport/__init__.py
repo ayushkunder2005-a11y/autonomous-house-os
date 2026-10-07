@@ -1,0 +1,1 @@
+"""Transport-side event buffering."""
